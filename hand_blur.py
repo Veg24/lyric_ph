@@ -1,7 +1,6 @@
 import cv2
 import mediapipe as mp
 import os
-import pygame
 
 def get_next_take_filename():
     """
@@ -34,23 +33,6 @@ def is_v_fingers_raised(hand_landmarks):
     
     return index_open and middle_open
 
-def is_fist_closed(hand_landmarks):
-    """
-    Checks if a hand is closed (making a fist / menggenggam).
-    All four main fingers (index, middle, ring, pinky) should be folded.
-    In screen coordinates, Y increases downwards, so folded/closed means 
-    the TIP is below the PIP joint (TIP.y > PIP.y).
-    """
-    landmarks = hand_landmarks.landmark
-    mp_hands = mp.solutions.hands
-    
-    index_folded = landmarks[mp_hands.HandLandmark.INDEX_FINGER_TIP].y > landmarks[mp_hands.HandLandmark.INDEX_FINGER_PIP].y
-    middle_folded = landmarks[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y > landmarks[mp_hands.HandLandmark.MIDDLE_FINGER_PIP].y
-    ring_folded = landmarks[mp_hands.HandLandmark.RING_FINGER_TIP].y > landmarks[mp_hands.HandLandmark.RING_FINGER_PIP].y
-    pinky_folded = landmarks[mp_hands.HandLandmark.PINKY_TIP].y > landmarks[mp_hands.HandLandmark.PINKY_PIP].y
-    
-    return index_folded and middle_folded and ring_folded and pinky_folded
-
 def main():
     # Initialize MediaPipe Hands
     mp_hands = mp.solutions.hands
@@ -64,26 +46,11 @@ def main():
         min_tracking_confidence=0.5
     )
     
-    # Initialize Pygame Mixer for audio playback
-    audio_file = "hidup jkw.mpeg"
-    has_sound = False
-    if os.path.exists(audio_file):
-        try:
-            pygame.mixer.init()
-            pygame.mixer.music.load(audio_file)
-            has_sound = True
-        except Exception as e:
-            print(f"Warning: Failed to initialize Pygame audio: {e}")
-    else:
-        print(f"Warning: '{audio_file}' not found. Audio playback disabled.")
-
     # Open webcam
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
         print("Error: Could not access the webcam.")
-        if has_sound:
-            pygame.mixer.quit()
         return
 
     # Set camera buffer size to 1 to eliminate frame caching lag
@@ -107,15 +74,12 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_filename, fourcc, fps, (actual_width, actual_height))
 
-    print("=== Hand Tracking & V-Fingers Blur / Fist Audio Playback ===")
+    print("=== Hand Tracking & V-Fingers Blur with Recording ===")
     print(f"Camera Resolution: {actual_width}x{actual_height} @ {fps} FPS")
     print(f"Recording status: Writing video to '{output_filename}'...")
     print("Instructions:")
     print("1. Raise the index and middle fingers on AT LEAST 1 hand (V pose) to trigger the blur effect.")
-    print("2. Make a fist (menggenggam) on AT LEAST 1 hand to play the audio of 'hidup jkw.mpeg'.")
-    print("3. Press 'q' on the video window to stop recording and exit.")
-    
-    audio_playing = False
+    print("2. Press 'q' on the video window to stop recording and exit.")
     
     while cap.isOpened():
         success, frame = cap.read()
@@ -134,38 +98,17 @@ def main():
         results = hands.process(rgb_frame)
         
         v_hands_count = 0
-        fist_detected = False
         
-        # Analyze hand gestures
+        # Count hands showing the raised V-fingers
         if results.multi_hand_landmarks:
             for hand_lms in results.multi_hand_landmarks:
-                if is_fist_closed(hand_lms):
-                    fist_detected = True
                 if is_v_fingers_raised(hand_lms):
                     v_hands_count += 1
         
         # Copy frame for output display
         output_frame = frame.copy()
         
-        # Handle fist audio playback
-        if fist_detected:
-            if not audio_playing:
-                audio_playing = True
-                if has_sound:
-                    try:
-                        pygame.mixer.music.play(-1) # Loop the audio
-                    except Exception as e:
-                        print(f"Error starting audio: {e}")
-        else:
-            if audio_playing:
-                audio_playing = False
-                if has_sound:
-                    try:
-                        pygame.mixer.music.stop()
-                    except Exception as e:
-                        print(f"Error stopping audio: {e}")
-            
-        # Apply Gaussian Blur if at least 1 hand shows the raised V-pose
+        # Apply Gaussian Blur if at least 1 hand shows the raised index and middle fingers
         if v_hands_count >= 1:
             # Optimize Blur performance (Downscale -> Blur -> Upscale)
             small_frame = cv2.resize(output_frame, (w // 4, h // 4))
@@ -185,8 +128,6 @@ def main():
     # Release resources
     cap.release()
     out.release()
-    if has_sound:
-        pygame.mixer.quit()
     cv2.destroyAllWindows()
     hands.close()
     
