@@ -65,17 +65,17 @@ def main():
     )
     
     # Initialize Pygame Mixer for audio playback
-    video_sound_file = "hidup jkw.mpeg"
+    audio_file = "hidup jkw.mpeg"
     has_sound = False
-    if os.path.exists(video_sound_file):
+    if os.path.exists(audio_file):
         try:
             pygame.mixer.init()
-            pygame.mixer.music.load(video_sound_file)
+            pygame.mixer.music.load(audio_file)
             has_sound = True
         except Exception as e:
             print(f"Warning: Failed to initialize Pygame audio: {e}")
     else:
-        print(f"Warning: '{video_sound_file}' not found. Audio playback disabled.")
+        print(f"Warning: '{audio_file}' not found. Audio playback disabled.")
 
     # Open webcam
     cap = cv2.VideoCapture(0)
@@ -107,16 +107,15 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_filename, fourcc, fps, (actual_width, actual_height))
 
-    print("=== Hand Tracking & V-Fingers Blur / Fist Video Playback ===")
+    print("=== Hand Tracking & V-Fingers Blur / Fist Audio Playback ===")
     print(f"Camera Resolution: {actual_width}x{actual_height} @ {fps} FPS")
     print(f"Recording status: Writing video to '{output_filename}'...")
     print("Instructions:")
     print("1. Raise the index and middle fingers on AT LEAST 1 hand (V pose) to trigger the blur effect.")
-    print("2. Make a fist (menggenggam) on AT LEAST 1 hand to play the video 'hidup jkw.mpeg'.")
+    print("2. Make a fist (menggenggam) on AT LEAST 1 hand to play the audio of 'hidup jkw.mpeg'.")
     print("3. Press 'q' on the video window to stop recording and exit.")
     
-    video_playing = False
-    video_cap = None
+    audio_playing = False
     
     while cap.isOpened():
         success, frame = cap.read()
@@ -148,47 +147,30 @@ def main():
         # Copy frame for output display
         output_frame = frame.copy()
         
-        # Handle fist video playback
+        # Handle fist audio playback
         if fist_detected:
-            if not video_playing:
-                # Start playing the video file
-                video_cap = cv2.VideoCapture(video_sound_file)
-                video_playing = True
+            if not audio_playing:
+                audio_playing = True
                 if has_sound:
                     try:
                         pygame.mixer.music.play(-1) # Loop the audio
                     except Exception as e:
                         print(f"Error starting audio: {e}")
-            
-            if video_cap and video_cap.isOpened():
-                ret_v, v_frame = video_cap.read()
-                if not ret_v:
-                    # Loop video: reset frame pointer to start
-                    video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    ret_v, v_frame = video_cap.read()
-                
-                if ret_v:
-                    # Resize the video frame to match webcam dimensions
-                    output_frame = cv2.resize(v_frame, (w, h))
         else:
-            if video_playing:
-                # Stop playing the video file
-                if video_cap:
-                    video_cap.release()
-                    video_cap = None
-                video_playing = False
+            if audio_playing:
+                audio_playing = False
                 if has_sound:
                     try:
                         pygame.mixer.music.stop()
                     except Exception as e:
                         print(f"Error stopping audio: {e}")
             
-            # Only apply Gaussian Blur if video is not playing and V fingers are raised
-            if v_hands_count >= 1:
-                # Optimize Blur performance (Downscale -> Blur -> Upscale)
-                small_frame = cv2.resize(output_frame, (w // 4, h // 4))
-                small_blurred = cv2.GaussianBlur(small_frame, (15, 15), 0)
-                output_frame = cv2.resize(small_blurred, (w, h), interpolation=cv2.INTER_LINEAR)
+        # Apply Gaussian Blur if at least 1 hand shows the raised V-pose
+        if v_hands_count >= 1:
+            # Optimize Blur performance (Downscale -> Blur -> Upscale)
+            small_frame = cv2.resize(output_frame, (w // 4, h // 4))
+            small_blurred = cv2.GaussianBlur(small_frame, (15, 15), 0)
+            output_frame = cv2.resize(small_blurred, (w, h), interpolation=cv2.INTER_LINEAR)
             
         # Write the processed frame to the video file
         out.write(output_frame)
@@ -203,8 +185,6 @@ def main():
     # Release resources
     cap.release()
     out.release()
-    if video_cap:
-        video_cap.release()
     if has_sound:
         pygame.mixer.quit()
     cv2.destroyAllWindows()
